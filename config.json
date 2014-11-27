@@ -1,0 +1,5 @@
+{
+  "dbname": "gust_production",
+  "username": "ababkin",
+  "query": "SELECT event_name, trackingid, created_at, hstore_to_json(properties) FROM analytics_logs LIMIT 1000000"
+}
