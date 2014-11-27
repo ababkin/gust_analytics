@@ -28,6 +28,7 @@ import           Data.String                          (fromString)
 import           Data.Text                            (Text)
 import qualified Data.Text                            as T
 {- import           Data.Time.Clock                   (UTCTime) -}
+import           Data.Maybe                           (fromMaybe)
 import           Data.Monoid
 import           Data.Time.LocalTime                  (LocalTime)
 import           GHC.Generics
@@ -43,7 +44,7 @@ instance FromJSON Config
 
 {- type LogEntry = (Maybe Text, Maybe Text, LocalTime, Value) -}
 
-type Props = Map Text (Maybe Text)
+type Props = Map Text Text
 data LogEntry = LogEntry {
       eventName  :: Maybe Text
     , trackingId :: Maybe Text
@@ -56,10 +57,16 @@ instance FromRow LogEntry where
                   field
               <*> field
               <*> field
-              <*> field
+              <*> (( M.map (\(Just v) -> v) . M.filter (/= Nothing) ) <$> field)
 
-instance FromField Props where
+instance FromField (Map Text (Maybe Text)) where
   fromField = fromJSONField
+
+data Stats = Stats{
+    userTotals :: Map Text Int
+  } deriving Show
+
+initStats = Stats M.empty
 
 main = do
   configJson <- BL8.readFile "config.json"
@@ -72,21 +79,13 @@ main = do
         , connectUser     = username config
       }
 
-      total <- PGS.fold_ conn (fromString $ query config) 0 consumer
-      putStr $ "total: " ++ (show total)
+      total <- PGS.fold_ conn (fromString $ query config) initStats consumer
+      putStr $ "totals: " ++ (show total)
 
   where
-    {- consumer :: (Show a, Monoid a) => a -> LogEntry -> IO a -}
-    consumer :: Int -> LogEntry -> IO Int
-    {- consumer :: [String] -> LogEntry -> IO [String] -}
-    consumer c le =
-      {- return $ c + 1 -}
-      {- return $ c <> [show $ props le] -}
-      if
-        case M.lookup "actor_id" (props le) of
-          Nothing       -> False
-          Just (Just "345933") -> True
-          Just _        -> False
+    consumer :: Stats -> LogEntry -> IO Stats
+    consumer stats le =
+      case M.lookup "actor_id" (props le) of
+        Nothing       -> return stats
+        Just actorId  -> return $ stats{userTotals = M.alter ( Just . (+1) . fromMaybe 0) actorId (userTotals stats)}
 
-        then return $ c + 1
-        else return c
