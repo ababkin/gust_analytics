@@ -26,4 +26,6 @@ executable GustAnalytics
     , vector
     , bytestring
     , time
+    , lens
+    , mtl
 
